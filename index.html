@@ -1,15 +1,365 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>漢字書き取りアプリ</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+<meta charset="utf-8">
+<title>漢字書き取り帖</title>
+
+<style>
+/* ------------------------------------------------------------------
+   design tokens
+   paper + sumi ink + hanko vermilion — grounded in the writing desk,
+   not a generic warm palette.
+------------------------------------------------------------------- */
+:root {
+  --paper: #efece3;
+  --paper-raised: #fbf9f2;
+  --ink: #22262b;
+  --ink-soft: #66645c;
+  --line: #ddd6c2;
+  --vermilion: #d8420f;
+  --vermilion-tint: #f4d9c8;
+  --bamboo: #3f7a52;
+  --bamboo-tint: #dbe8dc;
+
+  --font-display: "Hiragino Mincho ProN", "YuMincho", "Yu Mincho", "Noto Serif JP", serif;
+  --font-body: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius: 10px;
+  --shadow-paper: 0 1px 0 rgba(34,38,43,0.04), 0 6px 16px -10px rgba(34,38,43,0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1c1b18;
+    --paper-raised: #262420;
+    --ink: #ede8dc;
+    --ink-soft: #b0aa9a;
+    --line: #3a362e;
+    --vermilion: #ff6b3d;
+    --vermilion-tint: #40281d;
+    --bamboo: #6fbf8b;
+    --bamboo-tint: #24332a;
+    --shadow-paper: 0 1px 0 rgba(0,0,0,0.3), 0 8px 20px -10px rgba(0,0,0,0.5);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1c1b18;
+  --paper-raised: #262420;
+  --ink: #ede8dc;
+  --ink-soft: #b0aa9a;
+  --line: #3a362e;
+  --vermilion: #ff6b3d;
+  --vermilion-tint: #40281d;
+  --bamboo: #6fbf8b;
+  --bamboo-tint: #24332a;
+  --shadow-paper: 0 1px 0 rgba(0,0,0,0.3), 0 8px 20px -10px rgba(0,0,0,0.5);
+}
+:root[data-theme="light"] {
+  --paper: #efece3;
+  --paper-raised: #fbf9f2;
+  --ink: #22262b;
+  --ink-soft: #66645c;
+  --line: #ddd6c2;
+  --vermilion: #d8420f;
+  --vermilion-tint: #f4d9c8;
+  --bamboo: #3f7a52;
+  --bamboo-tint: #dbe8dc;
+  --shadow-paper: 0 1px 0 rgba(34,38,43,0.04), 0 6px 16px -10px rgba(34,38,43,0.25);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+/* faint genkōyōshi (manuscript-grid) texture, not a decoration but the
+   subject's own material */
+body {
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px),
+    repeating-linear-gradient(90deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px);
+  background-size: 28px 28px;
+  background-attachment: fixed;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .answer-box { animation: rise-in 0.35s ease-out; }
+  .level-card { transition: border-color .15s ease, transform .1s ease; }
+  .level-card:active { transform: scale(0.98); }
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------------------- header ------------------------------ */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--paper-raised) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hanko {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--vermilion);
+  color: #fff8f0;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: var(--shadow-paper);
+  transform: rotate(-2deg);
+}
+.brand h1 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: .02em;
+}
+.header-nav { display: flex; gap: 6px; }
+.nav-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+}
+.nav-btn.active { background: var(--vermilion-tint); color: var(--vermilion); font-weight: 600; }
+.nav-btn:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--vermilion);
+  outline-offset: 2px;
+}
+
+main {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 22px 18px 64px;
+}
+
+.screen h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.3rem;
+  margin: 4px 0 16px;
+  text-wrap: balance;
+}
+.screen h3 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  margin: 24px 0 10px;
+}
+
+/* --------------------------- home screen --------------------------- */
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+.level-card {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  background: var(--paper-raised);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  user-select: none;
+}
+.level-card.selected {
+  border-color: var(--vermilion);
+  background: var(--vermilion-tint);
+}
+.level-card .level-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.level-card .level-count {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 2px;
+  font-size: 0.95rem;
+}
+.review-toggle input { width: 18px; height: 18px; accent-color: var(--vermilion); }
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.primary-btn, .secondary-btn, .danger-btn {
+  border: none;
+  border-radius: var(--radius);
+  padding: 15px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+.primary-btn {
+  background: var(--vermilion);
+  color: #fff8f0;
+  box-shadow: var(--shadow-paper);
+}
+.primary-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.secondary-btn { background: var(--paper-raised); color: var(--ink); border: 1.5px solid var(--line); }
+.danger-btn { background: transparent; color: var(--vermilion); border: 1.5px solid var(--vermilion); }
+.text-btn {
+  background: none; border: none; color: var(--ink-soft); cursor: pointer;
+  font-size: 0.9rem; padding: 6px 0; font-family: var(--font-body);
+}
+.hint-text { color: var(--ink-soft); font-size: 0.85rem; text-align: center; margin-top: 14px; }
+
+/* --------------------------- quiz screen ---------------------------- */
+.quiz-top {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+}
+.progress-label { color: var(--ink-soft); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+
+.question-card {
+  background: var(--paper-raised);
+  border-radius: var(--radius);
+  padding: 18px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-paper);
+  margin-bottom: 18px;
+}
+.level-tag {
+  display: inline-block;
+  background: var(--vermilion-tint);
+  color: var(--vermilion);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin: 0 0 12px;
+  font-family: var(--font-body);
+}
+.sentence {
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+  line-height: 1.95;
+  margin: 0 0 8px;
+}
+.sentence .target {
+  color: var(--vermilion);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1.5px;
+}
+.hint-line { color: var(--ink-soft); font-size: 0.83rem; margin: 0; }
+
+.canvas-wrap { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 14px 0; }
+.kanji-canvas {
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf7;
+  touch-action: none;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02);
+}
+.canvas-actions { display: flex; justify-content: center; margin-bottom: 18px; }
+.reveal-area { display: flex; justify-content: center; }
+.answer-area { margin-top: 4px; }
+
+.answer-box {
+  background: var(--paper-raised);
+  border: 1.5px solid var(--vermilion);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.answer-word { font-family: var(--font-display); font-size: 2.6rem; font-weight: 700; margin: 0 0 4px; line-height: 1.1; }
+.answer-reading { color: var(--vermilion); font-size: 1.05rem; margin: 0 0 10px; font-family: var(--font-body); }
+.answer-meaning { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
+
+.grade-prompt { text-align: center; color: var(--ink-soft); margin: 0 0 10px; font-size: 0.92rem; }
+.grade-buttons { display: flex; gap: 12px; }
+.grade-btn {
+  flex: 1; padding: 16px; border-radius: var(--radius); border: none;
+  font-size: 1rem; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+}
+.grade-btn.correct { background: var(--bamboo); color: #fff; }
+.grade-btn.wrong { background: var(--vermilion); color: #fff8f0; }
+
+/* ------------------------- session end ------------------------------ */
+.session-summary {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+  margin: 16px 0;
+}
+.session-summary .stat-value { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; display: block; font-variant-numeric: tabular-nums; }
+.session-summary .stat-label { color: var(--ink-soft); font-size: 0.78rem; }
+
+/* --------------------------- stats screen ---------------------------- */
+.stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 4px; }
+.stats-overview .stat-box { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 8px; text-align: center; }
+.stats-overview .stat-box .stat-value { font-family: var(--font-display); font-size: 1.55rem; font-weight: 700; display: block; font-variant-numeric: tabular-nums; }
+.stats-overview .stat-box .stat-label { color: var(--ink-soft); font-size: 0.72rem; }
+
+.weak-list { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 8px; }
+.weak-list li {
+  background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px;
+  padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem;
+}
+.weak-list .weak-word { font-family: var(--font-display); font-weight: 700; }
+.weak-list .weak-reading { color: var(--ink-soft); font-size: 0.85rem; margin-left: 6px; }
+.weak-list .weak-score { color: var(--vermilion); font-size: 0.8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.empty-note { color: var(--ink-soft); font-size: 0.9rem; text-align: center; padding: 20px 0; }
+
+footer.app-footer {
+  max-width: 520px; margin: 0 auto; padding: 8px 18px 40px;
+  color: var(--ink-soft); font-size: 0.72rem; text-align: center;
+}
+</style>
 
 <header class="app-header">
-  <h1>✍️ 漢字書き取りアプリ</h1>
+  <div class="brand">
+    <span class="hanko" aria-hidden="true">書</span>
+    <h1>漢字書き取り帖</h1>
+  </div>
   <nav class="header-nav">
     <button id="nav-home" class="nav-btn active" type="button">ホーム</button>
     <button id="nav-stats" class="nav-btn" type="button">学習記録</button>
@@ -17,6 +367,7 @@
 </header>
 
 <main id="app"></main>
+<footer class="app-footer">級の判定は目安です。過去問集で確認しながらご利用ください。</footer>
 
 <template id="tpl-home">
   <section class="screen" id="screen-home">
@@ -49,9 +400,7 @@
       <p class="hint-line">次の読みの部分を漢字で書きましょう</p>
     </div>
 
-    <div class="canvas-wrap" id="canvas-wrap">
-      <!-- canvases injected by JS, one per kanji character -->
-    </div>
+    <div class="canvas-wrap" id="canvas-wrap"></div>
 
     <div class="canvas-actions">
       <button id="clear-btn" class="text-btn" type="button">🧹 消す</button>
@@ -101,7 +450,695 @@
   </section>
 </template>
 
-<script src="data.js"></script>
-<script src="app.js"></script>
-</body>
-</html>
+<script>
+// ------------------------------------------------------------------
+// データ（級ごとの問題）
+// 級判定は目安です。data 配列に同じ形式で追記すれば増やせます。
+// ------------------------------------------------------------------
+const KANJI_LEVELS = [
+  { id: "4", label: "4級" },
+  { id: "3", label: "3級" },
+  { id: "pre2", label: "準2級" },
+  { id: "2", label: "2級" },
+  { id: "pre1", label: "準1級" },
+  { id: "1", label: "1級" },
+];
+
+const KANJI_DATA = [
+  // ---------------- 4級 ----------------
+  { id: "4-01", level: "4", word: "承諾", reading: "しょうだく", sentence: "相手の提案にしょうだくした。", meaning: "申し出を聞き入れること" },
+  { id: "4-02", level: "4", word: "迅速", reading: "じんそく", sentence: "事故現場でじんそくな対応が求められた。", meaning: "非常にすばやいこと" },
+  { id: "4-03", level: "4", word: "削減", reading: "さくげん", sentence: "経費のさくげんに取り組む。", meaning: "けずって減らすこと" },
+  { id: "4-04", level: "4", word: "温暖", reading: "おんだん", sentence: "地球のおんだん化が進んでいる。", meaning: "気候が暖かいこと" },
+  { id: "4-05", level: "4", word: "拡張", reading: "かくちょう", sentence: "店舗をかくちょうする計画がある。", meaning: "範囲や規模を広げること" },
+  { id: "4-06", level: "4", word: "妥当", reading: "だとう", sentence: "この判断はだとうだと思う。", meaning: "適切で無理がないこと" },
+  { id: "4-07", level: "4", word: "循環", reading: "じゅんかん", sentence: "血液がじゅんかんする仕組みを学んだ。", meaning: "ひとまわりして元に戻ること" },
+  { id: "4-08", level: "4", word: "継承", reading: "けいしょう", sentence: "伝統をけいしょうしていく。", meaning: "受け継ぐこと" },
+  { id: "4-09", level: "4", word: "撤退", reading: "てったい", sentence: "市場からのてったいを決定した。", meaning: "引き下がること" },
+  { id: "4-10", level: "4", word: "緊張", reading: "きんちょう", sentence: "面接前はきんちょうした。", meaning: "心や体が張り詰めること" },
+  { id: "4-11", level: "4", word: "抑制", reading: "よくせい", sentence: "感情をよくせいする。", meaning: "抑えて止めること" },
+  { id: "4-12", level: "4", word: "促進", reading: "そくしん", sentence: "消費をそくしんする政策。", meaning: "物事が早く進むよう促すこと" },
+
+  { id: "4-13", level: "4", word: "把握", reading: "はあく", sentence: "全体をはあくする。", meaning: "しっかり理解すること" },
+  { id: "4-14", level: "4", word: "動揺", reading: "どうよう", sentence: "突然の知らせにどうようした。", meaning: "心が乱れ動くこと" },
+  { id: "4-15", level: "4", word: "派遣", reading: "はけん", sentence: "応援をはけんする。", meaning: "人を差し向けること" },
+  { id: "4-16", level: "4", word: "妨害", reading: "ぼうがい", sentence: "電波をぼうがいする行為があった。", meaning: "さまたげること" },
+  { id: "4-17", level: "4", word: "締結", reading: "ていけつ", sentence: "両国が条約をていけつした。", meaning: "取り決めを結ぶこと" },
+  { id: "4-18", level: "4", word: "侵害", reading: "しんがい", sentence: "権利のしんがいにあたる行為だ。", meaning: "他人の権利を侵すこと" },
+  { id: "4-19", level: "4", word: "弾力", reading: "だんりょく", sentence: "だんりょくのある生地を選ぶ。", meaning: "元に戻ろうとする力" },
+  { id: "4-20", level: "4", word: "傾斜", reading: "けいしゃ", sentence: "急なけいしゃの坂道を歩く。", meaning: "斜めに傾くこと" },
+  { id: "4-21", level: "4", word: "緩和", reading: "かんわ", sentence: "交通規制をかんわする。", meaning: "厳しさを和らげること" },
+  { id: "4-22", level: "4", word: "衝突", reading: "しょうとつ", sentence: "二台の車がしょうとつした。", meaning: "ぶつかること" },
+  { id: "4-23", level: "4", word: "索引", reading: "さくいん", sentence: "巻末のさくいんで調べる。", meaning: "調べやすくした一覧" },
+  { id: "4-24", level: "4", word: "潜在", reading: "せんざい", sentence: "せんざいする才能を見出す。", meaning: "表に出ず隠れて存在すること" },
+  { id: "4-25", level: "4", word: "補充", reading: "ほじゅう", sentence: "在庫をほじゅうする。", meaning: "足りない分を補うこと" },
+  { id: "4-26", level: "4", word: "濃厚", reading: "のうこう", sentence: "のうこうな味わいのスープだ。", meaning: "味や色が濃いこと" },
+  { id: "4-27", level: "4", word: "慎重", reading: "しんちょう", sentence: "しんちょうに検討を進める。", meaning: "注意深く軽々しくしないこと" },
+  { id: "4-28", level: "4", word: "執着", reading: "しゅうちゃく", sentence: "結果にしゅうちゃくしない。", meaning: "強くこだわること" },
+  { id: "4-29", level: "4", word: "陳列", reading: "ちんれつ", sentence: "新商品をちんれつする。", meaning: "見せるために並べること" },
+  { id: "4-30", level: "4", word: "摂取", reading: "せっしゅ", sentence: "栄養をせっしゅする。", meaning: "体内に取り入れること" },
+  { id: "4-31", level: "4", word: "抽出", reading: "ちゅうしゅつ", sentence: "必要な情報をちゅうしゅつする。", meaning: "取り出すこと" },
+  { id: "4-32", level: "4", word: "融合", reading: "ゆうごう", sentence: "異なる文化のゆうごうが進む。", meaning: "とけ合って一つになること" },
+  { id: "4-33", level: "4", word: "是正", reading: "ぜせい", sentence: "制度のぜせいを求める。", meaning: "悪い点を正すこと" },
+  { id: "4-34", level: "4", word: "是認", reading: "ぜにん", sentence: "現状をぜにんする。", meaning: "そうだと認めること" },
+  { id: "4-35", level: "4", word: "円満", reading: "えんまん", sentence: "話し合いはえんまんに解決した。", meaning: "穏やかで満ち足りていること" },
+  { id: "4-36", level: "4", word: "克服", reading: "こくふく", sentence: "困難をこくふくする。", meaning: "困難に打ち勝つこと" },
+  { id: "4-37", level: "4", word: "束縛", reading: "そくばく", sentence: "時間にそくばくされたくない。", meaning: "自由を制限すること" },
+  { id: "4-38", level: "4", word: "干渉", reading: "かんしょう", sentence: "他国の内政にかんしょうしない。", meaning: "他人のことに立ち入ること" },
+  { id: "4-39", level: "4", word: "錯覚", reading: "さっかく", sentence: "目のさっかくを利用した絵だ。", meaning: "誤って感じること" },
+  { id: "4-40", level: "4", word: "継続", reading: "けいぞく", sentence: "活動をけいぞくする。", meaning: "続けること" },
+  { id: "4-41", level: "4", word: "排出", reading: "はいしゅつ", sentence: "廃棄物をはいしゅつする。", meaning: "外に出すこと" },
+  { id: "4-42", level: "4", word: "一環", reading: "いっかん", sentence: "計画のいっかんとして行う。", meaning: "全体の中の一部分" },
+  { id: "4-43", level: "4", word: "特有", reading: "とくゆう", sentence: "地域とくゆうの文化を紹介する。", meaning: "そのものだけが持つこと" },
+  { id: "4-44", level: "4", word: "頻繁", reading: "ひんぱん", sentence: "この道はひんぱんに利用される。", meaning: "たびたび起こること" },
+  { id: "4-45", level: "4", word: "潤沢", reading: "じゅんたく", sentence: "じゅんたくな資金を確保する。", meaning: "豊かにあること" },
+  { id: "4-46", level: "4", word: "厳密", reading: "げんみつ", sentence: "げんみつに調べる。", meaning: "細かく正確なこと" },
+  { id: "4-47", level: "4", word: "新規", reading: "しんき", sentence: "しんきに事業を始める。", meaning: "新しく始めること" },
+  { id: "4-48", level: "4", word: "累積", reading: "るいせき", sentence: "疲労がるいせきする。", meaning: "積み重なること" },
+  { id: "4-49", level: "4", word: "加担", reading: "かたん", sentence: "不正にかたんする。", meaning: "力を貸すこと" },
+  { id: "4-50", level: "4", word: "献立", reading: "こんだて", sentence: "今晩のこんだてを考える。", meaning: "食事の内容の計画" },
+  { id: "4-51", level: "4", word: "冒頭", reading: "ぼうとう", sentence: "会議のぼうとうで説明する。", meaning: "文章や話の初め" },
+  { id: "4-52", level: "4", word: "末尾", reading: "まつび", sentence: "文章のまつびに署名する。", meaning: "一番後ろの部分" },
+  { id: "4-53", level: "4", word: "統率", reading: "とうそつ", sentence: "チームをとうそつする。", meaning: "人々をまとめ導くこと" },
+  { id: "4-54", level: "4", word: "誘導", reading: "ゆうどう", sentence: "避難ゆうどうを行う。", meaning: "案を導くこと" },
+  { id: "4-55", level: "4", word: "圧迫", reading: "あっぱく", sentence: "経済的にあっぱくされる。", meaning: "強く押さえつけること" },
+  { id: "4-56", level: "4", word: "抵抗", reading: "ていこう", sentence: "変化にていこうする。", meaning: "逆らうこと" },
+  { id: "4-57", level: "4", word: "補完", reading: "ほかん", sentence: "互いにほかんし合う関係だ。", meaning: "不足を補い完全にすること" },
+  { id: "4-58", level: "4", word: "増幅", reading: "ぞうふく", sentence: "不安がぞうふくする。", meaning: "程度を大きくすること" },
+  { id: "4-59", level: "4", word: "巧妙", reading: "こうみょう", sentence: "こうみょうな手口だった。", meaning: "非常に上手なこと" },
+  { id: "4-60", level: "4", word: "露呈", reading: "ろてい", sentence: "問題点がろていした。", meaning: "隠れていたことが表れること" },
+  { id: "4-61", level: "4", word: "打診", reading: "だしん", sentence: "参加をだしんする。", meaning: "様子をみて相手に働きかけること" },
+  { id: "4-62", level: "4", word: "促す", reading: "うながす", sentence: "行動をうながす。", meaning: "早くするよう仕向けること" },
+  { id: "4-63", level: "4", word: "見据える", reading: "みすえる", sentence: "将来をみすえる。", meaning: "しっかりと見つめること" },
+  { id: "4-64", level: "4", word: "潜む", reading: "ひそむ", sentence: "危険がひそむ場所だ。", meaning: "隠れて存在すること" },
+  { id: "4-65", level: "4", word: "携わる", reading: "たずさわる", sentence: "教育にたずさわる仕事をしている。", meaning: "関係し従事すること" },
+  { id: "4-66", level: "4", word: "顧みる", reading: "かえりみる", sentence: "過去をかえりみる。", meaning: "振り返って考えること" },
+  { id: "4-67", level: "4", word: "免れる", reading: "まぬがれる", sentence: "彼は罰をまぬがれる。", meaning: "危険や責任を避けること" },
+  { id: "4-68", level: "4", word: "潔い", reading: "いさぎよい", sentence: "いさぎよい態度で誤りを認めた。", meaning: "思い切りがよく立派なこと" },
+  { id: "4-69", level: "4", word: "煩わしい", reading: "わずらわしい", sentence: "わずらわしい手続きが続く。", meaning: "手間がかかり嫌なこと" },
+  { id: "4-70", level: "4", word: "著しい", reading: "いちじるしい", sentence: "いちじるしい進歩が見られる。", meaning: "はっきりと目立つこと" },
+  { id: "4-71", level: "4", word: "甚だしい", reading: "はなはだしい", sentence: "はなはだしい誤解を招いた。", meaning: "程度がひどいこと" },
+  { id: "4-72", level: "4", word: "潔白", reading: "けっぱく", sentence: "身のけっぱくを主張する。", meaning: "罪や不正がないこと" },
+  { id: "4-73", level: "4", word: "迎合", reading: "げいごう", sentence: "世間にげいごうするつもりはない。", meaning: "他人に気に入られようとすること" },
+  { id: "4-74", level: "4", word: "献身", reading: "けんしん", sentence: "けんしんてきに看護を続けた。", meaning: "自分を犠牲にして尽くすこと" },
+  { id: "4-75", level: "4", word: "統合", reading: "とうごう", sentence: "二つの部門をとうごうする。", meaning: "いくつかを一つにまとめること" },
+  { id: "4-76", level: "4", word: "妥結", reading: "だけつ", sentence: "労使交渉がだけつした。", meaning: "話し合いがまとまること" },
+  { id: "4-77", level: "4", word: "換算", reading: "かんさん", sentence: "円をドルにかんさんする。", meaning: "他の単位に計算しなおすこと" },
+  { id: "4-78", level: "4", word: "順応", reading: "じゅんのう", sentence: "新しい環境にじゅんのうする。", meaning: "環境に合わせること" },
+  { id: "4-79", level: "4", word: "徹底", reading: "てってい", sentence: "てっていして調査する。", meaning: "中途半端でなく行き渡ること" },
+  { id: "4-80", level: "4", word: "明瞭", reading: "めいりょう", sentence: "めいりょうな発音で話す。", meaning: "はっきりしていること" },
+  { id: "4-81", level: "4", word: "鮮明", reading: "せんめい", sentence: "事件のせんめいな記憶が残る。", meaning: "はっきりして際立つこと" },
+  { id: "4-82", level: "4", word: "一律", reading: "いちりつ", sentence: "いちりつに料金を定める。", meaning: "すべて同じようにすること" },
+  { id: "4-83", level: "4", word: "秩序", reading: "ちつじょ", sentence: "社会のちつじょを守る。", meaning: "物事の正しい順序" },
+  { id: "4-84", level: "4", word: "節減", reading: "せつげん", sentence: "経費をせつげんする。", meaning: "使う量を減らすこと" },
+  { id: "4-85", level: "4", word: "発端", reading: "ほったん", sentence: "事件のほったんを調べる。", meaning: "物事の始まり" },
+
+  // ---------------- 3級 ----------------
+  { id: "3-01", level: "3", word: "該当", reading: "がいとう", sentence: "この条件にがいとうする者はいない。", meaning: "当てはまること" },
+  { id: "3-02", level: "3", word: "遂行", reading: "すいこう", sentence: "任務をすいこうする。", meaning: "最後までやり遂げること" },
+  { id: "3-03", level: "3", word: "洞察", reading: "どうさつ", sentence: "鋭いどうさつ力を持つ人だ。", meaning: "物事の本質を見抜くこと" },
+  { id: "3-04", level: "3", word: "顕著", reading: "けんちょ", sentence: "効果がけんちょに現れた。", meaning: "はっきりと目立つこと" },
+  { id: "3-05", level: "3", word: "抵触", reading: "ていしょく", sentence: "法律にていしょくする行為だ。", meaning: "規則などに触れること" },
+  { id: "3-06", level: "3", word: "疎遠", reading: "そえん", sentence: "昔の友人とそえんになった。", meaning: "付き合いが薄れること" },
+  { id: "3-07", level: "3", word: "唯一", reading: "ゆいいつ", sentence: "それがゆいいつの方法だ。", meaning: "ただ一つであること" },
+  { id: "3-08", level: "3", word: "卓越", reading: "たくえつ", sentence: "たくえつした技術を持つ職人。", meaning: "他よりはるかに優れていること" },
+  { id: "3-09", level: "3", word: "憂慮", reading: "ゆうりょ", sentence: "将来をゆうりょする。", meaning: "心配して思い悩むこと" },
+  { id: "3-10", level: "3", word: "払拭", reading: "ふっしょく", sentence: "不安をふっしょくする。", meaning: "すっかり取り除くこと" },
+  { id: "3-11", level: "3", word: "履修", reading: "りしゅう", sentence: "必修科目をりしゅうする。", meaning: "課程を学び修めること" },
+  { id: "3-12", level: "3", word: "妥協", reading: "だきょう", sentence: "双方がだきょうして解決した。", meaning: "譲り合って折り合うこと" },
+
+  { id: "3-13", level: "3", word: "折衝", reading: "せっしょう", sentence: "外交交渉でせっしょうを重ねる。", meaning: "利害の対立を調整すること" },
+  { id: "3-14", level: "3", word: "憤慨", reading: "ふんがい", sentence: "不当な扱いにふんがいした。", meaning: "激しく怒ること" },
+  { id: "3-15", level: "3", word: "顕在", reading: "けんざい", sentence: "問題がけんざい化している。", meaning: "はっきりと表れていること" },
+  { id: "3-16", level: "3", word: "猶予", reading: "ゆうよ", sentence: "支払いのゆうよを求める。", meaning: "実行を先に延ばすこと" },
+  { id: "3-17", level: "3", word: "懸念", reading: "けねん", sentence: "影響をけねんする声がある。", meaning: "気にかけて心配すること" },
+  { id: "3-18", level: "3", word: "慶弔", reading: "けいちょう", sentence: "けいちょう休暇を取る。", meaning: "祝い事と不幸な事" },
+  { id: "3-19", level: "3", word: "卓抜", reading: "たくばつ", sentence: "たくばつした才能を示す。", meaning: "非常に優れていること" },
+  { id: "3-20", level: "3", word: "唆す", reading: "そそのかす", sentence: "悪事をそそのかす。", meaning: "そうするように仕向けること" },
+  { id: "3-21", level: "3", word: "欺く", reading: "あざむく", sentence: "敵の目をあざむく作戦だ。", meaning: "だますこと" },
+  { id: "3-22", level: "3", word: "険しい", reading: "けわしい", sentence: "けわしい山道を登る。", meaning: "傾斜が急で危ないこと" },
+  { id: "3-23", level: "3", word: "脆い", reading: "もろい", sentence: "もろい素材でできている。", meaning: "弱くすぐ壊れること" },
+  { id: "3-24", level: "3", word: "憂う", reading: "うれう", sentence: "将来をうれう声が上がる。", meaning: "心配し悲しむこと" },
+  { id: "3-25", level: "3", word: "慕う", reading: "したう", sentence: "恩師をしたう気持ちが強い。", meaning: "恋しく思い付いて行くこと" },
+  { id: "3-26", level: "3", word: "阻む", reading: "はばむ", sentence: "計画をはばむ要因がある。", meaning: "進行をさまたげること" },
+  { id: "3-27", level: "3", word: "恭しい", reading: "うやうやしい", sentence: "うやうやしい態度でお辞儀をする。", meaning: "礼儀正しくつつしみ深いこと" },
+  { id: "3-28", level: "3", word: "惜しむ", reading: "おしむ", sentence: "友との別れをおしむ。", meaning: "残念に思うこと" },
+  { id: "3-29", level: "3", word: "妬む", reading: "ねたむ", sentence: "人の成功をねたむ。", meaning: "うらやみ憎むこと" },
+  { id: "3-30", level: "3", word: "悟る", reading: "さとる", sentence: "真理をさとる。", meaning: "はっきりと理解すること" },
+  { id: "3-31", level: "3", word: "潜める", reading: "ひそめる", sentence: "声をひそめる。", meaning: "音や気配を隠すこと" },
+  { id: "3-32", level: "3", word: "蓄える", reading: "たくわえる", sentence: "食料をたくわえる。", meaning: "後のために取っておくこと" },
+  { id: "3-33", level: "3", word: "賄う", reading: "まかなう", sentence: "予算内でまかなう。", meaning: "必要な費用や物をやりくりすること" },
+  { id: "3-34", level: "3", word: "遮る", reading: "さえぎる", sentence: "視界をさえぎる建物がある。", meaning: "さまたげて止めること" },
+  { id: "3-35", level: "3", word: "陥る", reading: "おちいる", sentence: "危機におちいる。", meaning: "悪い状態に入り込むこと" },
+  { id: "3-36", level: "3", word: "覆う", reading: "おおう", sentence: "雲が空をおおう。", meaning: "上や外側をかぶせて隠すこと" },
+  { id: "3-37", level: "3", word: "尽くす", reading: "つくす", sentence: "力をつくす。", meaning: "全部出し切ること" },
+  { id: "3-38", level: "3", word: "携える", reading: "たずさえる", sentence: "資料をたずさえる。", meaning: "手に持って一緒に行くこと" },
+  { id: "3-39", level: "3", word: "慰める", reading: "なぐさめる", sentence: "友人をなぐさめる。", meaning: "心を和らげること" },
+  { id: "3-40", level: "3", word: "諭す", reading: "さとす", sentence: "子どもをさとす。", meaning: "よく分かるように教え導くこと" },
+  { id: "3-41", level: "3", word: "戒める", reading: "いましめる", sentence: "自らをいましめる。", meaning: "注意して忘れないようにさせること" },
+  { id: "3-42", level: "3", word: "憂鬱", reading: "ゆううつ", sentence: "ゆううつな天気が続く。", meaning: "気持ちが晴れないこと" },
+  { id: "3-43", level: "3", word: "悠久", reading: "ゆうきゅう", sentence: "ゆうきゅうの歴史を感じる。", meaning: "限りなく長く続くこと" },
+  { id: "3-44", level: "3", word: "荘厳", reading: "そうごん", sentence: "そうごんな儀式が行われた。", meaning: "重々しくおごそかなこと" },
+  { id: "3-45", level: "3", word: "悠然", reading: "ゆうぜん", sentence: "ゆうぜんとした態度を保つ。", meaning: "落ち着いてゆったりしていること" },
+  { id: "3-46", level: "3", word: "謙虚", reading: "けんきょ", sentence: "けんきょな姿勢で学ぶ。", meaning: "つつしみ深く素直なこと" },
+  { id: "3-47", level: "3", word: "寛大", reading: "かんだい", sentence: "かんだいな処置をとる。", meaning: "心が広く思いやりがあること" },
+  { id: "3-48", level: "3", word: "厳粛", reading: "げんしゅく", sentence: "げんしゅくな雰囲気の式典。", meaning: "おごそかで心が引き締まること" },
+  { id: "3-49", level: "3", word: "潤う", reading: "うるおう", sentence: "雨で大地がうるおう。", meaning: "水分や恵みで豊かになること" },
+  { id: "3-50", level: "3", word: "潜伏", reading: "せんぷく", sentence: "症状がせんぷくする期間がある。", meaning: "隠れて表に出ないこと" },
+  { id: "3-51", level: "3", word: "逸脱", reading: "いつだつ", sentence: "規則からいつだつする行為だ。", meaning: "本来の道筋から外れること" },
+  { id: "3-52", level: "3", word: "崩壊", reading: "ほうかい", sentence: "古い建物がほうかいした。", meaning: "崩れ壊れること" },
+  { id: "3-53", level: "3", word: "抹消", reading: "まっしょう", sentence: "記録をまっしょうする。", meaning: "消してなくすこと" },
+  { id: "3-54", level: "3", word: "撲滅", reading: "ぼくめつ", sentence: "犯罪のぼくめつを目指す。", meaning: "完全に滅ぼすこと" },
+  { id: "3-55", level: "3", word: "浪費", reading: "ろうひ", sentence: "時間をろうひする。", meaning: "無駄に使うこと" },
+  { id: "3-56", level: "3", word: "貢献", reading: "こうけん", sentence: "社会にこうけんする。", meaning: "力を尽くして役立つこと" },
+  { id: "3-57", level: "3", word: "顕彰", reading: "けんしょう", sentence: "功労者をけんしょうする。", meaning: "功績を広く知らせ表すこと" },
+  { id: "3-58", level: "3", word: "慰労", reading: "いろう", sentence: "社員をいろうする会を開く。", meaning: "苦労をねぎらうこと" },
+  { id: "3-59", level: "3", word: "醸す", reading: "かもす", sentence: "波紋をかもす発言だった。", meaning: "ある雰囲気を作り出すこと" },
+  { id: "3-60", level: "3", word: "蓄積", reading: "ちくせき", sentence: "疲労がちくせきする。", meaning: "少しずつたまること" },
+  { id: "3-61", level: "3", word: "露見", reading: "ろけん", sentence: "不正がろけんした。", meaning: "隠していたことが分かること" },
+  { id: "3-62", level: "3", word: "破綻", reading: "はたん", sentence: "経営がはたんする。", meaning: "うまくいかず崩れること" },
+  { id: "3-63", level: "3", word: "逸話", reading: "いつわ", sentence: "有名人のいつわを紹介する。", meaning: "あまり知られていない興味深い話" },
+  { id: "3-64", level: "3", word: "遺憾", reading: "いかん", sentence: "いかんの意を示す。", meaning: "残念に思うこと" },
+  { id: "3-65", level: "3", word: "委嘱", reading: "いしょく", sentence: "専門家にいしょくする。", meaning: "仕事を頼み任せること" },
+  { id: "3-66", level: "3", word: "折り合う", reading: "おりあう", sentence: "双方の意見がおりあう。", meaning: "互いに譲り合ってまとまること" },
+  { id: "3-67", level: "3", word: "免除", reading: "めんじょ", sentence: "学費をめんじょされる。", meaning: "義務や責任を免れさせること" },
+  { id: "3-68", level: "3", word: "猛烈", reading: "もうれつ", sentence: "もうれつな勢いで進む。", meaning: "非常に激しいこと" },
+  { id: "3-69", level: "3", word: "卑屈", reading: "ひくつ", sentence: "ひくつな態度をとる。", meaning: "必要以上に自分を低くすること" },
+  { id: "3-70", level: "3", word: "悼む", reading: "いたむ", sentence: "故人をいたむ。", meaning: "人の死を悲しむこと" },
+  { id: "3-71", level: "3", word: "惨め", reading: "みじめ", sentence: "みじめな思いをする。", meaning: "非常に痛ましく悲しい様子" },
+  { id: "3-72", level: "3", word: "憂き目", reading: "うきめ", sentence: "失敗のうきめを見る。", meaning: "つらい経験" },
+  { id: "3-73", level: "3", word: "遮断", reading: "しゃだん", sentence: "電流をしゃだんする。", meaning: "流れなどを断ち切ること" },
+  { id: "3-74", level: "3", word: "陶酔", reading: "とうすい", sentence: "音楽にとうすいする。", meaning: "うっとりと心を奪われること" },
+  { id: "3-75", level: "3", word: "卑近", reading: "ひきん", sentence: "ひきんな例で説明する。", meaning: "身近でありふれていること" },
+  { id: "3-76", level: "3", word: "匿名", reading: "とくめい", sentence: "とくめいで投稿する。", meaning: "名前を隠すこと" },
+  { id: "3-77", level: "3", word: "頑固", reading: "がんこ", sentence: "がんこな性格を直せない。", meaning: "考えを変えず意地を張ること" },
+  { id: "3-78", level: "3", word: "傑出", reading: "けっしゅつ", sentence: "けっしゅつした能力を持つ。", meaning: "他より特にすぐれていること" },
+  { id: "3-79", level: "3", word: "卓見", reading: "たっけん", sentence: "たっけんに敬意を表する。", meaning: "優れた見識" },
+  { id: "3-80", level: "3", word: "辛辣", reading: "しんらつ", sentence: "しんらつな批評を受けた。", meaning: "非常に手厳しいこと" },
+  { id: "3-81", level: "3", word: "執念", reading: "しゅうねん", sentence: "しゅうねんを見せる。", meaning: "強く思い続ける心" },
+  { id: "3-82", level: "3", word: "気概", reading: "きがい", sentence: "きがいを持って挑む。", meaning: "困難にも屈しない強い意気" },
+  { id: "3-83", level: "3", word: "邪魔", reading: "じゃま", sentence: "進行のじゃまになる。", meaning: "妨げること" },
+  { id: "3-84", level: "3", word: "潔癖", reading: "けっぺき", sentence: "けっぺきな性格だ。", meaning: "不潔や不正を極端に嫌うこと" },
+  { id: "3-85", level: "3", word: "果敢", reading: "かかん", sentence: "かかんに立ち向かう。", meaning: "決断力があり思い切って行うこと" },
+
+  // ---------------- 準2級 ----------------
+  { id: "p2-01", level: "pre2", word: "進捗", reading: "しんちょく", sentence: "工事のしんちょくを確認する。", meaning: "物事の進み具合" },
+  { id: "p2-02", level: "pre2", word: "円滑", reading: "えんかつ", sentence: "話し合いがえんかつに進んだ。", meaning: "滞りなく進むこと" },
+  { id: "p2-03", level: "pre2", word: "収束", reading: "しゅうそく", sentence: "事態がしゅうそくに向かっている。", meaning: "混乱が収まりまとまること" },
+  { id: "p2-04", level: "pre2", word: "融通", reading: "ゆうずう", sentence: "資金をゆうずうしてもらった。", meaning: "貸し借りして通じ合わせること" },
+  { id: "p2-05", level: "pre2", word: "折衷", reading: "せっちゅう", sentence: "和洋せっちゅうの建築様式。", meaning: "異なるものの中間を取ること" },
+  { id: "p2-06", level: "pre2", word: "頒布", reading: "はんぷ", sentence: "資料をはんぷする。", meaning: "広く配り分けること" },
+  { id: "p2-07", level: "pre2", word: "疾病", reading: "しっぺい", sentence: "しっぺいの予防に努める。", meaning: "病気" },
+  { id: "p2-08", level: "pre2", word: "弊害", reading: "へいがい", sentence: "制度のへいがいが指摘された。", meaning: "害になる悪い影響" },
+  { id: "p2-09", level: "pre2", word: "醸成", reading: "じょうせい", sentence: "信頼関係をじょうせいする。", meaning: "ある状態を次第に作り出すこと" },
+  { id: "p2-10", level: "pre2", word: "培う", reading: "つちかう", sentence: "経験を通じて力をつちかう。", meaning: "養い育てること" },
+  { id: "p2-11", level: "pre2", word: "逝去", reading: "せいきょ", sentence: "恩師がせいきょされた。", meaning: "人が亡くなること(敬った言い方)" },
+  { id: "p2-12", level: "pre2", word: "覚醒", reading: "かくせい", sentence: "意識がかくせいした。", meaning: "眠りや迷いから目覚めること" },
+
+  { id: "p2-13", level: "pre2", word: "逸失", reading: "いっしつ", sentence: "利益のいっしつを防ぐ。", meaning: "失ってしまうこと" },
+  { id: "p2-14", level: "pre2", word: "埋没", reading: "まいぼつ", sentence: "情報の中にまいぼつする。", meaning: "うずまり見えなくなること" },
+  { id: "p2-15", level: "pre2", word: "錬磨", reading: "れんま", sentence: "技をれんまする。", meaning: "鍛えて磨くこと" },
+  { id: "p2-16", level: "pre2", word: "払底", reading: "ふってい", sentence: "資材がふっていする。", meaning: "すっかりなくなること" },
+  { id: "p2-17", level: "pre2", word: "洗練", reading: "せんれん", sentence: "せんれんされた文章を書く。", meaning: "上品で優れたものにすること" },
+  { id: "p2-18", level: "pre2", word: "逓減", reading: "ていげん", sentence: "効果がていげんする。", meaning: "次第に減っていくこと" },
+  { id: "p2-19", level: "pre2", word: "逓増", reading: "ていぞう", sentence: "需要がていぞうする。", meaning: "次第に増えていくこと" },
+  { id: "p2-20", level: "pre2", word: "邁進", reading: "まいしん", sentence: "目標へまいしんする。", meaning: "ひるまず進むこと" },
+  { id: "p2-21", level: "pre2", word: "払暁", reading: "ふつぎょう", sentence: "ふつぎょうに出発する。", meaning: "夜明け" },
+  { id: "p2-22", level: "pre2", word: "蜂起", reading: "ほうき", sentence: "民衆がほうきする。", meaning: "大勢が一斉に立ち上がること" },
+  { id: "p2-23", level: "pre2", word: "覇権", reading: "はけん", sentence: "地域のはけんを争う。", meaning: "他を支配する権力" },
+  { id: "p2-24", level: "pre2", word: "懐柔", reading: "かいじゅう", sentence: "相手をかいじゅうする。", meaning: "うまく扱い従わせること" },
+  { id: "p2-25", level: "pre2", word: "迎撃", reading: "げいげき", sentence: "ミサイルをげいげきする。", meaning: "攻めてくる敵を迎え撃つこと" },
+  { id: "p2-26", level: "pre2", word: "収賄", reading: "しゅうわい", sentence: "しゅうわい事件が発覚した。", meaning: "賄賂を受け取ること" },
+  { id: "p2-27", level: "pre2", word: "贈賄", reading: "ぞうわい", sentence: "ぞうわい罪に問われる。", meaning: "賄賂を贈ること" },
+  { id: "p2-28", level: "pre2", word: "隠匿", reading: "いんとく", sentence: "証拠をいんとくする。", meaning: "こっそり隠すこと" },
+  { id: "p2-29", level: "pre2", word: "詐取", reading: "さしゅ", sentence: "金銭をさしゅする。", meaning: "だまして取ること" },
+  { id: "p2-30", level: "pre2", word: "恐喝", reading: "きょうかつ", sentence: "きょうかつの疑いで捕まる。", meaning: "脅して金品を求めること" },
+  { id: "p2-31", level: "pre2", word: "弁済", reading: "べんさい", sentence: "債務をべんさいする。", meaning: "借りた金や物を返すこと" },
+  { id: "p2-32", level: "pre2", word: "償還", reading: "しょうかん", sentence: "国債をしょうかんする。", meaning: "借りた金を返すこと" },
+  { id: "p2-33", level: "pre2", word: "猥雑", reading: "わいざつ", sentence: "わいざつな雰囲気の場所だ。", meaning: "下品で入り混じって汚いこと" },
+  { id: "p2-34", level: "pre2", word: "教唆", reading: "きょうさ", sentence: "犯罪をきょうさする。", meaning: "そそのかして行わせること" },
+  { id: "p2-35", level: "pre2", word: "幇助", reading: "ほうじょ", sentence: "犯行をほうじょする。", meaning: "手助けをすること(特に犯罪)" },
+  { id: "p2-36", level: "pre2", word: "隠蔽", reading: "いんぺい", sentence: "事実をいんぺいする。", meaning: "事実を隠すこと" },
+  { id: "p2-37", level: "pre2", word: "捏造", reading: "ねつぞう", sentence: "データをねつぞうする。", meaning: "ないことをあるように作り上げること" },
+  { id: "p2-38", level: "pre2", word: "改竄", reading: "かいざん", sentence: "記録をかいざんする。", meaning: "文書などを不正に書き換えること" },
+  { id: "p2-39", level: "pre2", word: "破棄", reading: "はき", sentence: "契約をはきする。", meaning: "取り決めなどを取りやめること" },
+  { id: "p2-40", level: "pre2", word: "撤回", reading: "てっかい", sentence: "発言をてっかいする。", meaning: "一度出した意見などを引き下げること" },
+  { id: "p2-41", level: "pre2", word: "更迭", reading: "こうてつ", sentence: "大臣がこうてつされる。", meaning: "地位にある人を代えること" },
+  { id: "p2-42", level: "pre2", word: "罷免", reading: "ひめん", sentence: "大臣をひめんする。", meaning: "職務をやめさせること" },
+  { id: "p2-43", level: "pre2", word: "引責", reading: "いんせき", sentence: "いんせき辞任する。", meaning: "責任をとること" },
+  { id: "p2-44", level: "pre2", word: "弾劾", reading: "だんがい", sentence: "大統領をだんがいする。", meaning: "不正を追及して責任を問うこと" },
+  { id: "p2-45", level: "pre2", word: "訴追", reading: "そつい", sentence: "容疑者をそついする。", meaning: "検察官が公の訴えを起こすこと" },
+  { id: "p2-46", level: "pre2", word: "抗弁", reading: "こうべん", sentence: "相手にこうべんする。", meaning: "反論して言い返すこと" },
+  { id: "p2-47", level: "pre2", word: "陳述", reading: "ちんじゅつ", sentence: "事実をちんじゅつする。", meaning: "事実や意見を述べること" },
+  { id: "p2-48", level: "pre2", word: "供述", reading: "きょうじゅつ", sentence: "容疑をきょうじゅつする。", meaning: "取り調べで話すこと" },
+  { id: "p2-49", level: "pre2", word: "起訴", reading: "きそ", sentence: "検察官が被告をきそする。", meaning: "検察官が裁判を求めること" },
+  { id: "p2-50", level: "pre2", word: "執行", reading: "しっこう", sentence: "刑がしっこうされる。", meaning: "実際に行うこと" },
+  { id: "p2-51", level: "pre2", word: "拘束", reading: "こうそく", sentence: "身柄をこうそくする。", meaning: "行動の自由を制限すること" },
+  { id: "p2-52", level: "pre2", word: "釈放", reading: "しゃくほう", sentence: "容疑者がしゃくほうされた。", meaning: "捕らえていた人を自由にすること" },
+  { id: "p2-53", level: "pre2", word: "収監", reading: "しゅうかん", sentence: "被告がしゅうかんされる。", meaning: "刑務所に入れること" },
+  { id: "p2-54", level: "pre2", word: "恩赦", reading: "おんしゃ", sentence: "おんしゃにより減刑された。", meaning: "刑を軽くしたり許すこと" },
+  { id: "p2-55", level: "pre2", word: "赦免", reading: "しゃめん", sentence: "しゃめんを願う。", meaning: "罪を許すこと" },
+  { id: "p2-56", level: "pre2", word: "免罪", reading: "めんざい", sentence: "めんざい符のような扱いを受ける。", meaning: "罪を免れること" },
+  { id: "p2-57", level: "pre2", word: "冤罪", reading: "えんざい", sentence: "えんざいを訴える。", meaning: "無実の罪" },
+  { id: "p2-58", level: "pre2", word: "誤謬", reading: "ごびゅう", sentence: "論理のごびゅうを指摘する。", meaning: "間違い" },
+  { id: "p2-59", level: "pre2", word: "詭弁", reading: "きべん", sentence: "きべんを弄する。", meaning: "こじつけの議論" },
+  { id: "p2-60", level: "pre2", word: "弁論", reading: "べんろん", sentence: "べんろん大会に出場する。", meaning: "意見を述べて論じ合うこと" },
+  { id: "p2-61", level: "pre2", word: "矜持", reading: "きょうじ", sentence: "きょうじを保つ。", meaning: "自分の能力を信じて持つ誇り" },
+  { id: "p2-62", level: "pre2", word: "迂遠", reading: "うえん", sentence: "うえんな説明で分かりにくい。", meaning: "実際からかけ離れて回りくどいこと" },
+  { id: "p2-63", level: "pre2", word: "迂回", reading: "うかい", sentence: "道路をうかいする。", meaning: "遠回りすること" },
+  { id: "p2-64", level: "pre2", word: "頓挫", reading: "とんざ", sentence: "計画がとんざする。", meaning: "勢いを失い行き詰まること" },
+  { id: "p2-65", level: "pre2", word: "破局", reading: "はきょく", sentence: "交渉がはきょくを迎える。", meaning: "関係が壊れて終わること" },
+  { id: "p2-66", level: "pre2", word: "決裂", reading: "けつれつ", sentence: "交渉がけつれつした。", meaning: "交渉などがまとまらず終わること" },
+  { id: "p2-67", level: "pre2", word: "膠着", reading: "こうちゃく", sentence: "こうちゃく状態が続く。", meaning: "動きが取れず固定した状態になること" },
+  { id: "p2-68", level: "pre2", word: "停滞", reading: "ていたい", sentence: "経済がていたいする。", meaning: "物事が進まず止まっていること" },
+  { id: "p2-69", level: "pre2", word: "沈滞", reading: "ちんたい", sentence: "市場がちんたいする。", meaning: "活気がなく低迷すること" },
+  { id: "p2-70", level: "pre2", word: "台頭", reading: "たいとう", sentence: "新興国がたいとうする。", meaning: "勢力を得て現れてくること" },
+  { id: "p2-71", level: "pre2", word: "席巻", reading: "せっけん", sentence: "市場をせっけんする。", meaning: "勢力を広げて一気に広まること" },
+  { id: "p2-72", level: "pre2", word: "隆盛", reading: "りゅうせい", sentence: "産業がりゅうせいを極める。", meaning: "勢いが盛んなこと" },
+  { id: "p2-73", level: "pre2", word: "衰退", reading: "すいたい", sentence: "産業がすいたいする。", meaning: "勢いが衰えて弱まること" },
+  { id: "p2-74", level: "pre2", word: "凋落", reading: "ちょうらく", sentence: "名門がちょうらくする。", meaning: "勢いが衰え落ちぶれること" },
+  { id: "p2-75", level: "pre2", word: "没落", reading: "ぼつらく", sentence: "王家がぼつらくする。", meaning: "栄えていたものが衰えること" },
+  { id: "p2-76", level: "pre2", word: "興隆", reading: "こうりゅう", sentence: "文化のこうりゅう期を迎える。", meaning: "勢いが盛んになること" },
+  { id: "p2-77", level: "pre2", word: "疲弊", reading: "ひへい", sentence: "経済がひへいする。", meaning: "疲れ弱ること" },
+  { id: "p2-78", level: "pre2", word: "窮乏", reading: "きゅうぼう", sentence: "きゅうぼうした生活を送る。", meaning: "非常に貧しく困ること" },
+  { id: "p2-79", level: "pre2", word: "蓄財", reading: "ちくざい", sentence: "ちくざいに励む。", meaning: "財産をたくわえること" },
+  { id: "p2-80", level: "pre2", word: "濫用", reading: "らんよう", sentence: "権力をらんようする。", meaning: "みだりに使うこと" },
+  { id: "p2-81", level: "pre2", word: "恣意", reading: "しい", sentence: "しい的な判断を避ける。", meaning: "自分勝手な考え" },
+  { id: "p2-82", level: "pre2", word: "独断", reading: "どくだん", sentence: "どくだんで決める。", meaning: "自分だけの判断で決めること" },
+  { id: "p2-83", level: "pre2", word: "専横", reading: "せんおう", sentence: "せんおうな振る舞いが目立つ。", meaning: "勝手気ままにふるまうこと" },
+
+  // ---------------- 2級 ----------------
+  { id: "2-01", level: "2", word: "逼迫", reading: "ひっぱく", sentence: "財政がひっぱくしている。", meaning: "余裕がなく苦しい状態になること" },
+  { id: "2-02", level: "2", word: "軋轢", reading: "あつれき", sentence: "両国の間にあつれきが生じた。", meaning: "仲が悪くなること" },
+  { id: "2-03", level: "2", word: "完璧", reading: "かんぺき", sentence: "かんぺきな計画を立てた。", meaning: "欠点がまったくないこと" },
+  { id: "2-04", level: "2", word: "相殺", reading: "そうさい", sentence: "利益と損失をそうさいする。", meaning: "差し引いて損得なしにすること" },
+  { id: "2-05", level: "2", word: "完遂", reading: "かんすい", sentence: "任務をかんすいした。", meaning: "完全に成し遂げること" },
+  { id: "2-06", level: "2", word: "傲慢", reading: "ごうまん", sentence: "ごうまんな態度を改めるべきだ。", meaning: "偉そうにおごり高ぶること" },
+  { id: "2-07", level: "2", word: "拿捕", reading: "だほ", sentence: "不審船をだほした。", meaning: "他国の船などを捕らえること" },
+  { id: "2-08", level: "2", word: "円熟", reading: "えんじゅく", sentence: "えんじゅくした演技を見せた。", meaning: "経験を積み豊かに熟達すること" },
+  { id: "2-09", level: "2", word: "桟橋", reading: "さんばし", sentence: "船がさんばしに着いた。", meaning: "岸から水上に架けた橋状の設備" },
+  { id: "2-10", level: "2", word: "弄する", reading: "ろうする", sentence: "策をろうする者がいた。", meaning: "たくらみを用いること" },
+  { id: "2-11", level: "2", word: "罵声", reading: "ばせい", sentence: "観客からばせいが飛んだ。", meaning: "口汚くののしる声" },
+  { id: "2-12", level: "2", word: "冷徹", reading: "れいてつ", sentence: "れいてつな判断を下した。", meaning: "感情に流されず冷静で厳しいこと" },
+
+  // ---------------- 準1級 ----------------
+  { id: "p1-01", level: "pre1", word: "佇む", reading: "たたずむ", sentence: "少女が公園にたたずむ姿を見た。", meaning: "しばらく立ち止まっていること" },
+  { id: "p1-02", level: "pre1", word: "憔悴", reading: "しょうすい", sentence: "しょうすいした表情を見せた。", meaning: "心配や病気でやせ衰えること" },
+  { id: "p1-03", level: "pre1", word: "忸怩", reading: "じくじ", sentence: "失敗をじくじたる思いで振り返る。", meaning: "深く恥じ入ること" },
+  { id: "p1-04", level: "pre1", word: "蕭条", reading: "しょうじょう", sentence: "しょうじょうとした冬の景色。", meaning: "ひっそりと寂しい様子" },
+  { id: "p1-05", level: "pre1", word: "慟哭", reading: "どうこく", sentence: "悲しみのどうこくが響いた。", meaning: "激しく泣き悲しむこと" },
+  { id: "p1-06", level: "pre1", word: "罵倒", reading: "ばとう", sentence: "相手をばとうする言葉を吐いた。", meaning: "ひどい言葉でののしること" },
+  { id: "p1-07", level: "pre1", word: "蒐集", reading: "しゅうしゅう", sentence: "古書をしゅうしゅうする趣味がある。", meaning: "集めること(収集の古い表記)" },
+  { id: "p1-08", level: "pre1", word: "逼塞", reading: "ひっそく", sentence: "田舎にひっそくして暮らす。", meaning: "世間から隠れて暮らすこと" },
+  { id: "p1-09", level: "pre1", word: "慙愧", reading: "ざんき", sentence: "ざんきの念に堪えない。", meaning: "恥ずかしく思うこと" },
+  { id: "p1-10", level: "pre1", word: "呵責", reading: "かしゃく", sentence: "良心のかしゃくを感じた。", meaning: "厳しく責めること" },
+
+  // ---------------- 1級 ----------------
+  { id: "1-01", level: "1", word: "剽窃", reading: "ひょうせつ", sentence: "他人の論文をひょうせつした。", meaning: "他人の作品を無断で盗用すること" },
+  { id: "1-02", level: "1", word: "桎梏", reading: "しっこく", sentence: "因習のしっこくから逃れる。", meaning: "自由を厳しく束縛するもの" },
+  { id: "1-03", level: "1", word: "罵詈雑言", reading: "ばりぞうごん", sentence: "ばりぞうごんを浴びせられた。", meaning: "口汚く色々にののしる言葉" },
+  { id: "1-04", level: "1", word: "蕪雑", reading: "ぶざつ", sentence: "ぶざつな文章を書き直す。", meaning: "整っておらず乱雑なこと" },
+  { id: "1-05", level: "1", word: "諂う", reading: "へつらう", sentence: "上司にへつらう態度が目立つ。", meaning: "気に入られようとこびること" },
+  { id: "1-06", level: "1", word: "姑息", reading: "こそく", sentence: "こそくな手段を使うべきではない。", meaning: "一時しのぎであること" },
+  { id: "1-07", level: "1", word: "敷衍", reading: "ふえん", sentence: "論をふえんして説明する。", meaning: "意味を押し広げて説明すること" },
+  { id: "1-08", level: "1", word: "忌憚", reading: "きたん", sentence: "きたんのない意見を聞かせてほしい。", meaning: "遠慮すること" },
+];
+</script>
+
+<script>
+// ------------------------------------------------------------------
+// 漢字書き取りアプリ - メインロジック
+// ------------------------------------------------------------------
+const STORAGE_PROGRESS_KEY = "kanjiDictationProgress_v1";
+const STORAGE_SETTINGS_KEY = "kanjiDictationSettings_v1";
+const MAX_SESSION_LENGTH = 20;
+
+const appEl = document.getElementById("app");
+
+function loadProgress() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_PROGRESS_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveProgress(progress) {
+  localStorage.setItem(STORAGE_PROGRESS_KEY, JSON.stringify(progress));
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_SETTINGS_KEY));
+    if (s && Array.isArray(s.levels)) return s;
+  } catch (e) { /* ignore */ }
+  return { levels: KANJI_LEVELS.map(l => l.id), reviewOnly: false };
+}
+function saveSettings(settings) {
+  localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+}
+function getItemProgress(progress, id) {
+  return progress[id] || { box: 0, correct: 0, wrong: 0, lastResult: null, lastSeen: 0 };
+}
+
+let progress = loadProgress();
+let settings = loadSettings();
+
+const state = {
+  screen: "home",
+  queue: [],
+  currentIndex: 0,
+  revealed: false,
+  sessionStats: { correct: 0, wrong: 0 },
+};
+
+function setScreen(name) {
+  state.screen = name;
+  document.getElementById("nav-home").classList.toggle("active", name === "home");
+  document.getElementById("nav-stats").classList.toggle("active", name === "stats");
+  render();
+}
+document.getElementById("nav-home").addEventListener("click", () => setScreen("home"));
+document.getElementById("nav-stats").addEventListener("click", () => setScreen("stats"));
+
+function render() {
+  appEl.innerHTML = "";
+  if (state.screen === "home") renderHome();
+  else if (state.screen === "quiz") renderQuiz();
+  else if (state.screen === "sessionEnd") renderSessionEnd();
+  else if (state.screen === "stats") renderStats();
+}
+
+function levelWordCount(levelId) {
+  return KANJI_DATA.filter(w => w.level === levelId).length;
+}
+
+function renderHome() {
+  appEl.innerHTML = "";
+  const tpl = document.getElementById("tpl-home");
+  appEl.appendChild(tpl.content.cloneNode(true));
+
+  const grid = document.getElementById("level-grid");
+  KANJI_LEVELS.forEach(level => {
+    const card = document.createElement("div");
+    card.className = "level-card" + (settings.levels.includes(level.id) ? " selected" : "");
+    card.innerHTML = `
+      <span class="level-name">${level.label}</span>
+      <span class="level-count">${levelWordCount(level.id)}問</span>
+    `;
+    card.addEventListener("click", () => {
+      const idx = settings.levels.indexOf(level.id);
+      if (idx >= 0) settings.levels.splice(idx, 1);
+      else settings.levels.push(level.id);
+      saveSettings(settings);
+      renderHome();
+    });
+    grid.appendChild(card);
+  });
+
+  const reviewCheckbox = document.getElementById("review-only-checkbox");
+  reviewCheckbox.checked = settings.reviewOnly;
+  reviewCheckbox.addEventListener("change", () => {
+    settings.reviewOnly = reviewCheckbox.checked;
+    saveSettings(settings);
+    renderHome();
+  });
+
+  const filtered = getFilteredWords();
+  const summary = document.getElementById("selection-summary");
+  const startBtn = document.getElementById("start-btn");
+
+  if (settings.levels.length === 0) {
+    summary.textContent = "級を1つ以上選んでください。";
+    startBtn.disabled = true;
+  } else if (filtered.length === 0) {
+    summary.textContent = settings.reviewOnly
+      ? "選んだ級の中に、まだ苦手な漢字はありません。"
+      : "この条件に合う問題がありません。";
+    startBtn.disabled = true;
+  } else {
+    summary.textContent = `${filtered.length}問の中から出題します。`;
+    startBtn.disabled = false;
+  }
+  startBtn.addEventListener("click", startSession);
+}
+
+function getFilteredWords() {
+  let words = KANJI_DATA.filter(w => settings.levels.includes(w.level));
+  if (settings.reviewOnly) {
+    words = words.filter(w => getItemProgress(progress, w.id).wrong > 0);
+  }
+  return words;
+}
+
+function buildQueue(words) {
+  const weighted = words.map(w => {
+    const box = getItemProgress(progress, w.id).box;
+    const weight = Math.max(0.5, 6 - box);
+    const key = Math.pow(Math.random(), 1 / weight);
+    return { word: w, key };
+  });
+  weighted.sort((a, b) => b.key - a.key);
+  const limit = settings.reviewOnly ? weighted.length : Math.min(weighted.length, MAX_SESSION_LENGTH);
+  return weighted.slice(0, limit).map(x => x.word);
+}
+
+function startSession() {
+  const filtered = getFilteredWords();
+  if (filtered.length === 0) return;
+  state.queue = buildQueue(filtered);
+  state.currentIndex = 0;
+  state.revealed = false;
+  state.sessionStats = { correct: 0, wrong: 0 };
+  setScreen("quiz");
+}
+
+const LEVEL_LABELS = Object.fromEntries(KANJI_LEVELS.map(l => [l.id, l.label]));
+let canvasContexts = [];
+
+function renderQuiz() {
+  appEl.innerHTML = "";
+  const tpl = document.getElementById("tpl-quiz");
+  appEl.appendChild(tpl.content.cloneNode(true));
+
+  const question = state.queue[state.currentIndex];
+
+  document.getElementById("quit-btn").addEventListener("click", () => setScreen("home"));
+  document.getElementById("progress-label").textContent = `${state.currentIndex + 1} / ${state.queue.length}`;
+  document.getElementById("question-level-tag").textContent = LEVEL_LABELS[question.level];
+
+  const sentenceHtml = question.sentence.replace(
+    question.reading,
+    `<span class="target">${question.reading}</span>`
+  );
+  document.getElementById("question-sentence").innerHTML = sentenceHtml;
+
+  setupCanvases(Array.from(question.word).length);
+  document.getElementById("clear-btn").addEventListener("click", clearAllCanvases);
+  document.getElementById("reveal-btn").addEventListener("click", () => {
+    state.revealed = true;
+    showAnswer(question);
+  });
+  document.getElementById("grade-correct").addEventListener("click", () => gradeAnswer(question, true));
+  document.getElementById("grade-wrong").addEventListener("click", () => gradeAnswer(question, false));
+
+  if (state.revealed) showAnswer(question);
+}
+
+function setupCanvases(charCount) {
+  const wrap = document.getElementById("canvas-wrap");
+  wrap.innerHTML = "";
+  canvasContexts = [];
+  const size = charCount >= 4 ? 92 : 128;
+
+  for (let i = 0; i < charCount; i++) {
+    const canvas = document.createElement("canvas");
+    canvas.className = "kanji-canvas";
+    canvas.width = size;
+    canvas.height = size;
+    wrap.appendChild(canvas);
+
+    const ctx = canvas.getContext("2d");
+    drawGuide(ctx, size, size);
+
+    const entry = { canvas, ctx, drawing: false, lastX: 0, lastY: 0 };
+    canvasContexts.push(entry);
+    attachDrawingHandlers(entry);
+  }
+}
+
+function drawGuide(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#fffdf7";
+  ctx.fillRect(0, 0, w, h);
+  ctx.save();
+  ctx.strokeStyle = "#ddd3bd";
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w / 2, 0);
+  ctx.lineTo(w / 2, h);
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function attachDrawingHandlers(entry) {
+  const { canvas, ctx } = entry;
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    entry.drawing = true;
+    const p = pos(e);
+    entry.lastX = p.x; entry.lastY = p.y;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#22262b";
+    ctx.fill();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!entry.drawing) return;
+    e.preventDefault();
+    const p = pos(e);
+    ctx.strokeStyle = "#22262b";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(entry.lastX, entry.lastY);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    entry.lastX = p.x; entry.lastY = p.y;
+  });
+  function stop() { entry.drawing = false; }
+  canvas.addEventListener("pointerup", stop);
+  canvas.addEventListener("pointercancel", stop);
+  canvas.addEventListener("pointerleave", stop);
+}
+
+function clearAllCanvases() {
+  canvasContexts.forEach(entry => drawGuide(entry.ctx, entry.canvas.width, entry.canvas.height));
+}
+
+function showAnswer(question) {
+  document.getElementById("reveal-area").hidden = true;
+  const answerArea = document.getElementById("answer-area");
+  answerArea.hidden = false;
+  document.getElementById("answer-word").textContent = question.word;
+  document.getElementById("answer-reading").textContent = question.reading;
+  document.getElementById("answer-meaning").textContent = question.meaning || "";
+}
+
+function gradeAnswer(question, isCorrect) {
+  const item = getItemProgress(progress, question.id);
+  if (isCorrect) {
+    item.box = Math.min(5, item.box + 1);
+    item.correct += 1;
+    item.lastResult = "correct";
+    state.sessionStats.correct += 1;
+  } else {
+    item.box = 0;
+    item.wrong += 1;
+    item.lastResult = "wrong";
+    state.sessionStats.wrong += 1;
+  }
+  item.lastSeen = Date.now();
+  progress[question.id] = item;
+  saveProgress(progress);
+
+  state.revealed = false;
+  if (state.currentIndex + 1 < state.queue.length) {
+    state.currentIndex += 1;
+    renderQuiz();
+    appEl.scrollIntoView({ block: "start" });
+  } else {
+    setScreen("sessionEnd");
+  }
+}
+
+function renderSessionEnd() {
+  appEl.innerHTML = "";
+  const tpl = document.getElementById("tpl-session-end");
+  appEl.appendChild(tpl.content.cloneNode(true));
+
+  const { correct, wrong } = state.sessionStats;
+  document.getElementById("session-summary").innerHTML = `
+    <div><span class="stat-value">${correct}</span><span class="stat-label">できた</span></div>
+    <div><span class="stat-value">${wrong}</span><span class="stat-label">できなかった</span></div>
+    <div><span class="stat-value">${correct + wrong}</span><span class="stat-label">合計</span></div>
+  `;
+
+  const reviewBtn = document.getElementById("review-wrong-btn");
+  if (wrong === 0) {
+    reviewBtn.remove();
+  } else {
+    reviewBtn.addEventListener("click", () => {
+      settings.reviewOnly = true;
+      saveSettings(settings);
+      const words = getFilteredWords();
+      if (words.length === 0) { setScreen("home"); return; }
+      state.queue = buildQueue(words);
+      state.currentIndex = 0;
+      state.revealed = false;
+      state.sessionStats = { correct: 0, wrong: 0 };
+      setScreen("quiz");
+    });
+  }
+  document.getElementById("back-home-btn").addEventListener("click", () => setScreen("home"));
+}
+
+function renderStats() {
+  appEl.innerHTML = "";
+  const tpl = document.getElementById("tpl-stats");
+  appEl.appendChild(tpl.content.cloneNode(true));
+
+  let totalCorrect = 0, totalWrong = 0, attempted = 0;
+  KANJI_DATA.forEach(w => {
+    const p = progress[w.id];
+    if (p && (p.correct > 0 || p.wrong > 0)) {
+      attempted += 1;
+      totalCorrect += p.correct;
+      totalWrong += p.wrong;
+    }
+  });
+  const totalAnswers = totalCorrect + totalWrong;
+  const accuracy = totalAnswers > 0 ? Math.round((totalCorrect / totalAnswers) * 100) : 0;
+
+  document.getElementById("stats-overview").innerHTML = `
+    <div class="stat-box"><span class="stat-value">${attempted}</span><span class="stat-label">学習した漢字</span></div>
+    <div class="stat-box"><span class="stat-value">${accuracy}%</span><span class="stat-label">正答率</span></div>
+    <div class="stat-box"><span class="stat-value">${totalAnswers}</span><span class="stat-label">総解答数</span></div>
+  `;
+
+  const weakList = document.getElementById("weak-list");
+  const weakItems = KANJI_DATA
+    .map(w => ({ word: w, p: progress[w.id] }))
+    .filter(x => x.p && x.p.wrong > 0)
+    .sort((a, b) => (b.p.wrong - b.p.correct) - (a.p.wrong - a.p.correct))
+    .slice(0, 15);
+
+  if (weakItems.length === 0) {
+    weakList.innerHTML = `<li class="empty-note" style="display:block;text-align:center;">まだ苦手な漢字はありません。</li>`;
+  } else {
+    weakList.innerHTML = weakItems.map(x => `
+      <li>
+        <span><span class="weak-word">${x.word.word}</span><span class="weak-reading">${x.word.reading}</span></span>
+        <span class="weak-score">○${x.p.correct} / ✕${x.p.wrong}</span>
+      </li>
+    `).join("");
+  }
+
+  document.getElementById("reset-progress-btn").addEventListener("click", () => {
+    if (confirm("学習記録をすべてリセットします。よろしいですか？")) {
+      progress = {};
+      saveProgress(progress);
+      renderStats();
+    }
+  });
+}
+
+render();
+</script>
