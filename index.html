@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>漢字書き取りアプリ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>✍️ 漢字書き取りアプリ</h1>
+  <nav class="header-nav">
+    <button id="nav-home" class="nav-btn active" type="button">ホーム</button>
+    <button id="nav-stats" class="nav-btn" type="button">学習記録</button>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<template id="tpl-home">
+  <section class="screen" id="screen-home">
+    <h2>級を選んでスタート</h2>
+    <div class="level-grid" id="level-grid"></div>
+
+    <label class="review-toggle">
+      <input type="checkbox" id="review-only-checkbox">
+      苦手な漢字だけ復習する
+    </label>
+
+    <div class="home-actions">
+      <button id="start-btn" class="primary-btn" type="button">この条件で開始</button>
+    </div>
+
+    <p class="hint-text" id="selection-summary"></p>
+  </section>
+</template>
+
+<template id="tpl-quiz">
+  <section class="screen" id="screen-quiz">
+    <div class="quiz-top">
+      <button id="quit-btn" class="text-btn" type="button">← 中断してホームへ</button>
+      <span class="progress-label" id="progress-label"></span>
+    </div>
+
+    <div class="question-card">
+      <p class="level-tag" id="question-level-tag"></p>
+      <p class="sentence" id="question-sentence"></p>
+      <p class="hint-line">次の読みの部分を漢字で書きましょう</p>
+    </div>
+
+    <div class="canvas-wrap" id="canvas-wrap">
+      <!-- canvases injected by JS, one per kanji character -->
+    </div>
+
+    <div class="canvas-actions">
+      <button id="clear-btn" class="text-btn" type="button">🧹 消す</button>
+    </div>
+
+    <div class="answer-area" id="answer-area" hidden>
+      <div class="answer-box">
+        <p class="answer-word" id="answer-word"></p>
+        <p class="answer-reading" id="answer-reading"></p>
+        <p class="answer-meaning" id="answer-meaning"></p>
+      </div>
+      <div class="grade-actions">
+        <p class="grade-prompt">正しく書けましたか？</p>
+        <div class="grade-buttons">
+          <button id="grade-wrong" class="grade-btn wrong" type="button">✕ できなかった</button>
+          <button id="grade-correct" class="grade-btn correct" type="button">○ できた</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal-area" id="reveal-area">
+      <button id="reveal-btn" class="primary-btn" type="button">答えを見る</button>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-session-end">
+  <section class="screen" id="screen-session-end">
+    <h2>お疲れさまでした！</h2>
+    <div class="session-summary" id="session-summary"></div>
+    <div class="home-actions">
+      <button id="review-wrong-btn" class="primary-btn" type="button">間違えた漢字を復習する</button>
+      <button id="back-home-btn" class="secondary-btn" type="button">ホームへ戻る</button>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-stats">
+  <section class="screen" id="screen-stats">
+    <h2>学習記録</h2>
+    <div class="stats-overview" id="stats-overview"></div>
+    <h3>苦手な漢字</h3>
+    <ul class="weak-list" id="weak-list"></ul>
+    <div class="home-actions">
+      <button id="reset-progress-btn" class="danger-btn" type="button">記録をリセット</button>
+    </div>
+  </section>
+</template>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
