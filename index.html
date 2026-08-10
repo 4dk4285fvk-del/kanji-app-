@@ -969,9 +969,68 @@ function setupCanvases(charCount, guideChars) {
     drawGuide(ctx, RES, RES, guideChar);
 
     const entry = { canvas, ctx, drawing: false, lastX: 0, lastY: 0, guideChar };
+
+    // Trace mode ("scratch card" reveal): a solid dark render of the guide
+    // character sits on an offscreen canvas; tracing paints an accumulating
+    // mask, and only the mask ∩ dark-glyph intersection gets composited onto
+    // the visible canvas — so a finger straying off the character reveals
+    // nothing at all.
+    if (guideChar) {
+      const darkGlyphCanvas = document.createElement("canvas");
+      darkGlyphCanvas.width = RES;
+      darkGlyphCanvas.height = RES;
+      const dctx = darkGlyphCanvas.getContext("2d");
+      dctx.fillStyle = "#22262b";
+      dctx.font = `${Math.floor(RES * 0.72)}px "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+      dctx.textAlign = "center";
+      dctx.textBaseline = "middle";
+      dctx.fillText(guideChar, RES / 2, RES / 2 + RES * 0.03);
+
+      const traceMaskCanvas = document.createElement("canvas");
+      traceMaskCanvas.width = RES;
+      traceMaskCanvas.height = RES;
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = RES;
+      tempCanvas.height = RES;
+
+      entry.darkGlyphCanvas = darkGlyphCanvas;
+      entry.traceMaskCanvas = traceMaskCanvas;
+      entry.traceMaskCtx = traceMaskCanvas.getContext("2d");
+      entry.tempCanvas = tempCanvas;
+      entry.tempCtx = tempCanvas.getContext("2d");
+    }
+
     canvasContexts.push(entry);
     attachDrawingHandlers(entry);
   }
+}
+
+function revealTraceAt(entry, x1, y1, x2, y2) {
+  const RES = entry.canvas.width;
+  const tctx = entry.traceMaskCtx;
+  tctx.strokeStyle = "#000";
+  tctx.fillStyle = "#000";
+  tctx.lineCap = "round";
+  tctx.lineJoin = "round";
+  tctx.lineWidth = 50;
+  tctx.beginPath();
+  tctx.moveTo(x1, y1);
+  tctx.lineTo(x2, y2);
+  tctx.stroke();
+  tctx.beginPath();
+  tctx.arc(x2, y2, 25, 0, Math.PI * 2);
+  tctx.fill();
+
+  const tc = entry.tempCtx;
+  tc.clearRect(0, 0, RES, RES);
+  tc.globalCompositeOperation = "source-over";
+  tc.drawImage(entry.darkGlyphCanvas, 0, 0);
+  tc.globalCompositeOperation = "destination-in";
+  tc.drawImage(entry.traceMaskCanvas, 0, 0);
+  tc.globalCompositeOperation = "source-over";
+
+  entry.ctx.drawImage(entry.tempCanvas, 0, 0);
 }
 
 function drawGuide(ctx, w, h, guideChar) {
@@ -1015,23 +1074,31 @@ function attachDrawingHandlers(entry) {
     entry.drawing = true;
     const p = pos(e);
     entry.lastX = p.x; entry.lastY = p.y;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "#22262b";
-    ctx.fill();
+    if (entry.guideChar) {
+      revealTraceAt(entry, p.x, p.y, p.x, p.y);
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#22262b";
+      ctx.fill();
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
     if (!entry.drawing) return;
     e.preventDefault();
     const p = pos(e);
-    ctx.strokeStyle = "#22262b";
-    ctx.lineWidth = 12;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(entry.lastX, entry.lastY);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
+    if (entry.guideChar) {
+      revealTraceAt(entry, entry.lastX, entry.lastY, p.x, p.y);
+    } else {
+      ctx.strokeStyle = "#22262b";
+      ctx.lineWidth = 12;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(entry.lastX, entry.lastY);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
     entry.lastX = p.x; entry.lastY = p.y;
   });
   function stop() { entry.drawing = false; }
@@ -1041,7 +1108,12 @@ function attachDrawingHandlers(entry) {
 }
 
 function clearAllCanvases() {
-  canvasContexts.forEach(entry => drawGuide(entry.ctx, entry.canvas.width, entry.canvas.height, entry.guideChar));
+  canvasContexts.forEach(entry => {
+    drawGuide(entry.ctx, entry.canvas.width, entry.canvas.height, entry.guideChar);
+    if (entry.traceMaskCtx) {
+      entry.traceMaskCtx.clearRect(0, 0, entry.traceMaskCanvas.width, entry.traceMaskCanvas.height);
+    }
+  });
 }
 
 function showAnswer(question) {
