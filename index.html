@@ -947,7 +947,7 @@ function renderQuiz() {
   if (state.revealed) showAnswer(question);
 }
 
-function setupCanvases(charCount) {
+function setupCanvases(charCount, guideChars) {
   const wrap = document.getElementById("canvas-wrap");
   wrap.innerHTML = "";
   canvasContexts = [];
@@ -965,15 +965,16 @@ function setupCanvases(charCount) {
     wrap.appendChild(canvas);
 
     const ctx = canvas.getContext("2d");
-    drawGuide(ctx, RES, RES);
+    const guideChar = guideChars ? guideChars[i] : null;
+    drawGuide(ctx, RES, RES, guideChar);
 
-    const entry = { canvas, ctx, drawing: false, lastX: 0, lastY: 0 };
+    const entry = { canvas, ctx, drawing: false, lastX: 0, lastY: 0, guideChar };
     canvasContexts.push(entry);
     attachDrawingHandlers(entry);
   }
 }
 
-function drawGuide(ctx, w, h) {
+function drawGuide(ctx, w, h, guideChar) {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#fffdf7";
   ctx.fillRect(0, 0, w, h);
@@ -988,6 +989,15 @@ function drawGuide(ctx, w, h) {
   ctx.lineTo(w, h / 2);
   ctx.stroke();
   ctx.restore();
+  if (guideChar) {
+    ctx.save();
+    ctx.fillStyle = "#cabfa2";
+    ctx.font = `${Math.floor(h * 0.72)}px "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(guideChar, w / 2, h / 2 + h * 0.03);
+    ctx.restore();
+  }
 }
 
 function attachDrawingHandlers(entry) {
@@ -1031,7 +1041,7 @@ function attachDrawingHandlers(entry) {
 }
 
 function clearAllCanvases() {
-  canvasContexts.forEach(entry => drawGuide(entry.ctx, entry.canvas.width, entry.canvas.height));
+  canvasContexts.forEach(entry => drawGuide(entry.ctx, entry.canvas.width, entry.canvas.height, entry.guideChar));
 }
 
 function showAnswer(question) {
@@ -1060,6 +1070,14 @@ function gradeAnswer(question, isCorrect) {
   progress[question.id] = item;
   saveProgress(progress);
 
+  if (isCorrect) {
+    advanceQuestion();
+  } else {
+    showTracePractice(question);
+  }
+}
+
+function advanceQuestion() {
   state.revealed = false;
   if (state.currentIndex + 1 < state.queue.length) {
     state.currentIndex += 1;
@@ -1068,6 +1086,25 @@ function gradeAnswer(question, isCorrect) {
   } else {
     setScreen("sessionEnd");
   }
+}
+
+function showTracePractice(question) {
+  const chars = Array.from(question.word);
+  setupCanvases(chars.length, chars);
+
+  const gradeActions = document.querySelector(".grade-actions");
+  if (gradeActions) {
+    gradeActions.innerHTML = `
+      <p class="grade-prompt">お手本をなぞって、正しい形を覚えましょう</p>
+      <button id="trace-next-btn" class="primary-btn" type="button">次へ</button>
+    `;
+    document.getElementById("trace-next-btn").addEventListener("click", advanceQuestion);
+  }
+
+  const clearBtn = document.getElementById("clear-btn");
+  if (clearBtn) clearBtn.textContent = "🧹 消してもう一度なぞる";
+
+  appEl.scrollIntoView({ block: "start" });
 }
 
 function renderSessionEnd() {
