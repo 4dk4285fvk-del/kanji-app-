@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>漢字書き取り帖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* ------------------------------------------------------------------
    design tokens
@@ -21,7 +24,7 @@
   --bamboo: #3f7a52;
   --bamboo-tint: #dbe8dc;
 
-  --font-display: "Hiragino Mincho ProN", "YuMincho", "Yu Mincho", "Noto Serif JP", serif;
+  --font-display: "Klee One", "Hiragino Mincho ProN", "YuMincho", "Yu Mincho", "Noto Serif JP", serif;
   --font-body: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
 
   --radius: 10px;
@@ -128,7 +131,7 @@ body {
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1rem;
   box-shadow: var(--shadow-paper);
   transform: rotate(-2deg);
@@ -200,7 +203,7 @@ main {
 }
 .level-card .level-name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1.05rem;
 }
 .level-card .level-count {
@@ -312,7 +315,7 @@ main {
   text-align: center;
   margin-bottom: 18px;
 }
-.answer-word { font-family: var(--font-display); font-size: 2.6rem; font-weight: 700; margin: 0 0 4px; line-height: 1.1; }
+.answer-word { font-family: var(--font-display); font-size: 2.6rem; font-weight: 600; margin: 0 0 4px; line-height: 1.1; }
 .answer-reading { color: var(--vermilion); font-size: 1.05rem; margin: 0 0 10px; font-family: var(--font-body); }
 .answer-meaning { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
 
@@ -336,13 +339,13 @@ main {
   text-align: center;
   margin: 16px 0;
 }
-.session-summary .stat-value { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; display: block; font-variant-numeric: tabular-nums; }
+.session-summary .stat-value { font-family: var(--font-display); font-size: 1.9rem; font-weight: 600; display: block; font-variant-numeric: tabular-nums; }
 .session-summary .stat-label { color: var(--ink-soft); font-size: 0.78rem; }
 
 /* --------------------------- stats screen ---------------------------- */
 .stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 4px; }
 .stats-overview .stat-box { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 8px; text-align: center; }
-.stats-overview .stat-box .stat-value { font-family: var(--font-display); font-size: 1.55rem; font-weight: 700; display: block; font-variant-numeric: tabular-nums; }
+.stats-overview .stat-box .stat-value { font-family: var(--font-display); font-size: 1.55rem; font-weight: 600; display: block; font-variant-numeric: tabular-nums; }
 .stats-overview .stat-box .stat-label { color: var(--ink-soft); font-size: 0.72rem; }
 
 .weak-list { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 8px; }
@@ -350,7 +353,7 @@ main {
   background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px;
   padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem;
 }
-.weak-list .weak-word { font-family: var(--font-display); font-weight: 700; }
+.weak-list .weak-word { font-family: var(--font-display); font-weight: 600; }
 .weak-list .weak-reading { color: var(--ink-soft); font-size: 0.85rem; margin-left: 6px; }
 .weak-list .weak-score { color: var(--vermilion); font-size: 0.8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .empty-note { color: var(--ink-soft); font-size: 0.9rem; text-align: center; padding: 20px 0; }
@@ -981,7 +984,7 @@ function setupCanvases(charCount, guideChars) {
       darkGlyphCanvas.height = RES;
       const dctx = darkGlyphCanvas.getContext("2d");
       dctx.fillStyle = "#22262b";
-      dctx.font = `${Math.floor(RES * 0.72)}px "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+      dctx.font = `600 ${Math.floor(RES * 0.72)}px "Klee One", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
       dctx.textAlign = "center";
       dctx.textBaseline = "middle";
       dctx.fillText(guideChar, RES / 2, RES / 2 + RES * 0.03);
@@ -999,6 +1002,25 @@ function setupCanvases(charCount, guideChars) {
       entry.traceMaskCtx = traceMaskCanvas.getContext("2d");
       entry.tempCanvas = tempCanvas;
       entry.tempCtx = tempCanvas.getContext("2d");
+
+      // Canvas text does not wait for webfonts the way DOM text does, and
+      // Google Fonts splits CJK into per-character unicode-range chunks, so
+      // the very first draw of a given kanji is likely to fall back to the
+      // system serif before "Klee One" finishes downloading. Re-render both
+      // the visible guide and the offscreen dark glyph once it's actually
+      // ready.
+      if (document.fonts && document.fonts.load) {
+        const fontSpec = `600 ${Math.floor(RES * 0.72)}px "Klee One"`;
+        document.fonts.load(fontSpec, guideChar).then(() => {
+          drawGuide(entry.ctx, RES, RES, guideChar);
+          dctx.clearRect(0, 0, RES, RES);
+          dctx.fillStyle = "#22262b";
+          dctx.font = `600 ${Math.floor(RES * 0.72)}px "Klee One", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+          dctx.textAlign = "center";
+          dctx.textBaseline = "middle";
+          dctx.fillText(guideChar, RES / 2, RES / 2 + RES * 0.03);
+        }).catch(() => {});
+      }
     }
 
     canvasContexts.push(entry);
@@ -1051,7 +1073,7 @@ function drawGuide(ctx, w, h, guideChar) {
   if (guideChar) {
     ctx.save();
     ctx.fillStyle = "#cabfa2";
-    ctx.font = `${Math.floor(h * 0.72)}px "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+    ctx.font = `600 ${Math.floor(h * 0.72)}px "Klee One", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(guideChar, w / 2, h / 2 + h * 0.03);
