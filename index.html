@@ -292,10 +292,10 @@ main {
 }
 .hint-line { color: var(--ink-soft); font-size: 0.83rem; margin: 0; }
 
-.canvas-wrap { display: flex; flex-direction: column; gap: 12px; margin: 14px 0; }
+.canvas-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 14px 0; }
 .kanji-canvas {
   display: block;
-  width: 100%;
+  width: 90%;
   aspect-ratio: 1 / 1;
   border: 1.5px solid var(--line);
   border-radius: 8px;
@@ -1164,11 +1164,7 @@ function gradeAnswer(question, isCorrect) {
   progress[question.id] = item;
   saveProgress(progress);
 
-  if (isCorrect) {
-    advanceQuestion();
-  } else {
-    showTracePractice(question);
-  }
+  showTracePractice(question);
 }
 
 function advanceQuestion() {
