@@ -1181,20 +1181,35 @@ function playStrokeDemo(entry) {
   step();
 }
 
+function getStrokeSamples(el) {
+  if (!el.__samples) {
+    const len = el.getTotalLength();
+    const SAMPLE_COUNT = 28;
+    const pts = [];
+    for (let i = 0; i <= SAMPLE_COUNT; i++) {
+      pts.push(el.getPointAtLength((i / SAMPLE_COUNT) * len));
+    }
+    el.__samples = pts;
+  }
+  return el.__samples;
+}
+
 function attachStrokeHandlers(entry) {
   const { svg } = entry;
   let active = false;
-  let startPoint = null;
-  // Real touch input always carries a few pixels of jitter, so "did it
-  // move at all" still fires on a bare tap. Require the finger to have
-  // travelled a real distance before any hit-test runs at all.
-  const MOVE_THRESHOLD = 5; // in the 109-unit viewBox (~5% of the box)
-  // How close the finger must get to the current stroke's own starting
-  // point before that stroke can be marked complete — otherwise a drag for
-  // an unrelated stroke that merely crosses this one's path would finish it.
-  const START_RADIUS = 16;
-
-  entry.nearStartOfCurrent = false;
+  let lastP = null;
+  // A stroke only completes once the finger has actually travelled along
+  // most of its length — not merely touched two points on it, and not
+  // merely crossed through it while tracing a different, intersecting
+  // stroke. Coverage is tracked against sample points spread along the
+  // real KanjiVG path. Fast drags can skip from one pointermove event to
+  // the next with real physical distance between them, so each move is
+  // walked in short interpolated steps rather than testing only its
+  // endpoint — otherwise a quick straight-line cut across a hooked or
+  // curved stroke could rack up coverage it never actually followed.
+  const COVER_RADIUS = 6; // close to the stroke's own visual width
+  const COVERAGE_THRESHOLD = 0.8;
+  const STEP_SIZE = 3; // interpolation step, in the 109-unit viewBox
 
   function toSvgPoint(e) {
     const ctm = svg.getScreenCTM();
@@ -1205,56 +1220,62 @@ function attachStrokeHandlers(entry) {
     return pt.matrixTransform(ctm.inverse());
   }
 
-  function tryHit(e) {
-    if (entry.playingDemo) return;
-    if (entry.currentStrokeIndex >= entry.strokeEls.length) return;
-    const p = toSvgPoint(e);
-    if (!p) return;
-    const currentEl = entry.strokeEls[entry.currentStrokeIndex];
-
-    if (!entry.nearStartOfCurrent) {
-      const startPt = currentEl.getPointAtLength(0);
-      const dx0 = p.x - startPt.x, dy0 = p.y - startPt.y;
-      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) <= START_RADIUS) {
-        entry.nearStartOfCurrent = true;
-      } else {
-        return;
+  function markCoverage(samples, point) {
+    let touchedNewSample = false;
+    for (let i = 0; i < samples.length; i++) {
+      if (entry.coveredMask[i]) continue;
+      const dx = point.x - samples[i].x, dy = point.y - samples[i].y;
+      if (Math.sqrt(dx * dx + dy * dy) <= COVER_RADIUS) {
+        entry.coveredMask[i] = true;
+        touchedNewSample = true;
       }
     }
+    return touchedNewSample;
+  }
 
-    // Hit-test with a generous corridor (wider than the visible stroke) so
-    // a fingertip doesn't need pixel-perfect accuracy; restore immediately
-    // so nothing visibly changes width.
-    currentEl.setAttribute("stroke-width", "16");
-    const hit = currentEl.isPointInStroke(p);
-    currentEl.setAttribute("stroke-width", "7");
-    if (hit) {
+  function processPoint(p) {
+    if (entry.playingDemo) return;
+    if (entry.currentStrokeIndex >= entry.strokeEls.length) return;
+    const currentEl = entry.strokeEls[entry.currentStrokeIndex];
+    const samples = getStrokeSamples(currentEl);
+    if (!entry.coveredMask || entry.coveredMask.length !== samples.length) {
+      entry.coveredMask = new Array(samples.length).fill(false);
+    }
+    if (!markCoverage(samples, p)) return;
+    const coveredCount = entry.coveredMask.filter(Boolean).length;
+    if (coveredCount / samples.length >= COVERAGE_THRESHOLD) {
       entry.currentStrokeIndex += 1;
-      entry.nearStartOfCurrent = false;
+      entry.coveredMask = null;
       paintStrokeColors(entry);
     }
   }
 
-  // Only a real drag counts as tracing — a bare tap (even with a few
-  // pixels of sensor jitter) must not complete a stroke by itself.
   svg.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
     active = true;
-    startPoint = toSvgPoint(e);
+    lastP = toSvgPoint(e);
+    if (lastP) processPoint(lastP);
   });
   svg.addEventListener("pointermove", (e) => {
     if (!active) return;
     e.preventDefault();
     const p = toSvgPoint(e);
-    if (p && startPoint) {
-      const dx = p.x - startPoint.x;
-      const dy = p.y - startPoint.y;
-      if (Math.sqrt(dx * dx + dy * dy) < MOVE_THRESHOLD) return;
+    if (!p) return;
+    if (lastP) {
+      const dx = p.x - lastP.x, dy = p.y - lastP.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const steps = Math.min(40, Math.ceil(dist / STEP_SIZE));
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        processPoint({ x: lastP.x + dx * t, y: lastP.y + dy * t });
+      }
+    } else {
+      processPoint(p);
     }
-    tryHit(e);
+    lastP = p;
   });
-  function stop() { active = false; startPoint = null; }
+  function stop() { active = false; lastP = null; }
   svg.addEventListener("pointerup", stop);
   svg.addEventListener("pointercancel", stop);
   svg.addEventListener("pointerleave", stop);
@@ -1339,7 +1360,7 @@ function clearAllCanvases() {
     if (entry.mode === "stroke") {
       entry.playingDemo = false;
       entry.currentStrokeIndex = 0;
-      entry.nearStartOfCurrent = false;
+      entry.coveredMask = null;
       entry.strokeEls.forEach((el) => {
         el.style.transition = "";
         el.style.strokeDasharray = "";
