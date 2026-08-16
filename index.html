@@ -1198,17 +1198,19 @@ function attachStrokeHandlers(entry) {
   const { svg } = entry;
   let active = false;
   let lastP = null;
-  // A stroke only completes once the finger has actually travelled along
-  // most of its length — not merely touched two points on it, and not
-  // merely crossed through it while tracing a different, intersecting
-  // stroke. Coverage is tracked against sample points spread along the
-  // real KanjiVG path. Fast drags can skip from one pointermove event to
-  // the next with real physical distance between them, so each move is
-  // walked in short interpolated steps rather than testing only its
-  // endpoint — otherwise a quick straight-line cut across a hooked or
-  // curved stroke could rack up coverage it never actually followed.
-  const COVER_RADIUS = 6; // close to the stroke's own visual width
-  const COVERAGE_THRESHOLD = 0.8;
+  // A stroke only completes once the finger has genuinely travelled from
+  // near its start to near its end. Tracked as the range of path positions
+  // visited (nearest-sample index), not a raw count of "touched" points —
+  // real touch input drifts a few pixels even during an intended stationary
+  // tap, and a count-based tally can slowly accumulate that drift into a
+  // false completion on a short stroke. Drift alone keeps the visited
+  // range narrow; only an actual start-to-end pass widens it enough.
+  // Fast drags can also skip real distance between pointermove events, so
+  // each move is walked in short interpolated steps — otherwise a quick
+  // straight-line cut across a hooked stroke could still visit both ends
+  // without ever passing near its middle.
+  const COVER_RADIUS = 6; // close to the stroke's own visual width — points further than this from the path are ignored entirely
+  const END_ZONE = 0.15; // outer 15% of the stroke at each end counts as "reached"
   const STEP_SIZE = 3; // interpolation step, in the 109-unit viewBox
 
   function toSvgPoint(e) {
@@ -1220,32 +1222,30 @@ function attachStrokeHandlers(entry) {
     return pt.matrixTransform(ctm.inverse());
   }
 
-  function markCoverage(samples, point) {
-    let touchedNewSample = false;
-    for (let i = 0; i < samples.length; i++) {
-      if (entry.coveredMask[i]) continue;
-      const dx = point.x - samples[i].x, dy = point.y - samples[i].y;
-      if (Math.sqrt(dx * dx + dy * dy) <= COVER_RADIUS) {
-        entry.coveredMask[i] = true;
-        touchedNewSample = true;
-      }
-    }
-    return touchedNewSample;
-  }
-
   function processPoint(p) {
     if (entry.playingDemo) return;
     if (entry.currentStrokeIndex >= entry.strokeEls.length) return;
     const currentEl = entry.strokeEls[entry.currentStrokeIndex];
     const samples = getStrokeSamples(currentEl);
-    if (!entry.coveredMask || entry.coveredMask.length !== samples.length) {
-      entry.coveredMask = new Array(samples.length).fill(false);
+
+    let nearestIdx = -1, nearestDist = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const dx = p.x - samples[i].x, dy = p.y - samples[i].y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
     }
-    if (!markCoverage(samples, p)) return;
-    const coveredCount = entry.coveredMask.filter(Boolean).length;
-    if (coveredCount / samples.length >= COVERAGE_THRESHOLD) {
+    if (nearestDist > COVER_RADIUS) return; // nowhere near this stroke at all
+
+    if (entry.minIndexReached == null || nearestIdx < entry.minIndexReached) entry.minIndexReached = nearestIdx;
+    if (entry.maxIndexReached == null || nearestIdx > entry.maxIndexReached) entry.maxIndexReached = nearestIdx;
+
+    const lastIdx = samples.length - 1;
+    const reachedStart = entry.minIndexReached <= lastIdx * END_ZONE;
+    const reachedEnd = entry.maxIndexReached >= lastIdx * (1 - END_ZONE);
+    if (reachedStart && reachedEnd) {
       entry.currentStrokeIndex += 1;
-      entry.coveredMask = null;
+      entry.minIndexReached = null;
+      entry.maxIndexReached = null;
       paintStrokeColors(entry);
     }
   }
@@ -1360,7 +1360,8 @@ function clearAllCanvases() {
     if (entry.mode === "stroke") {
       entry.playingDemo = false;
       entry.currentStrokeIndex = 0;
-      entry.coveredMask = null;
+      entry.minIndexReached = null;
+      entry.maxIndexReached = null;
       entry.strokeEls.forEach((el) => {
         el.style.transition = "";
         el.style.strokeDasharray = "";
